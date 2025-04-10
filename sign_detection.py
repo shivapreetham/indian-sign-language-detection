@@ -12,11 +12,20 @@ BUFFER_LENGTH = 10
 with open('model.p', 'rb') as f:
     model_dict = pickle.load(f)
 model = model_dict['model']
-
 labels_dict = {
-    0: 'hello', 1: 'balle balle', 2: 'thinking', 3: 'i love you',
-    4: 'had you food?', 5: 'i am strong', 6: 'fuck you', 7: 'attack on titan',
-    8: 'namaste', 9: 'shivapreetham: handsome boi'
+    0: 'hello', 1: 'balle balle', 2: 'thinking', 3: 'i love this',
+    4: 'had you food?', 5: 'i am strong', 6: 'shut up', 7: 'attack on titan',
+    8: 'namaste', 9: 'perfect' , 10: 'how are you ', 11 : 'i am good/agree/ok',
+    12 : 'a student',13 : 'wait',14 : 'i am',  
+    15 : 'At a university',16 : 'Computer Student',17 : 'Pursuing Engineering',
+    18 : 'Passionate about Innovation',19 : 'Could you please repeat?',20 : 'NO',
+    21 : 'I got it',22 : 'Thank you',23 : 'Nice to meet you',
+    24 : 'Good bye',25 : 'See you soon! ',
+    26 : 'God',27 : 'walk',28 : 'sleep',
+    29 : 'Time',30 : 'Hearing Aid',31 : 'Sick',
+    32 : 'Drink',33 : 'sorry',34 : 'call',
+    35 : 'here',36 : '',37 : '',
+    38 : '',39 : '',40 : '',
 }
 
 mp_holistic = mp.solutions.holistic
@@ -109,6 +118,7 @@ def signDetection():
             
             features = get_weighted_features(results)
             feature_buffer.append(features)
+
             if len(feature_buffer) > BUFFER_LENGTH:
                 feature_buffer = feature_buffer[-BUFFER_LENGTH:]
             
