@@ -3,8 +3,9 @@ import pickle
 import cv2
 import mediapipe as mp
 
+# Feature weights: reduced face weight to avoid overpowering hand features.
 WEIGHT_HAND = 1.0
-WEIGHT_FACE = 0.5
+WEIGHT_FACE = 0.1   # Reduced face weight
 WEIGHT_POSE = 0.3
 
 DATA_DIR = './data'
@@ -13,7 +14,8 @@ labels = []
 
 mp_holistic = mp.solutions.holistic
 
-with mp_holistic.Holistic(static_image_mode=True, min_detection_confidence=0.3) as holistic:
+# Use a higher confidence threshold for static image mode
+with mp_holistic.Holistic(static_image_mode=True, min_detection_confidence=0.6) as holistic:
     for dir_ in os.listdir(DATA_DIR):
         dir_path = os.path.join(DATA_DIR, dir_)
         if not os.path.isdir(dir_path):
@@ -28,6 +30,7 @@ with mp_holistic.Holistic(static_image_mode=True, min_detection_confidence=0.3) 
             results = holistic.process(img_rgb)
             feature_vector = []
 
+            # Left hand landmarks
             if results.left_hand_landmarks:
                 left = results.left_hand_landmarks
                 left_x = [lm.x for lm in left.landmark]
@@ -38,6 +41,7 @@ with mp_holistic.Holistic(static_image_mode=True, min_detection_confidence=0.3) 
             else:
                 feature_vector.extend([0.0] * (21 * 2))
 
+            # Right hand landmarks
             if results.right_hand_landmarks:
                 right = results.right_hand_landmarks
                 right_x = [lm.x for lm in right.landmark]
@@ -48,6 +52,7 @@ with mp_holistic.Holistic(static_image_mode=True, min_detection_confidence=0.3) 
             else:
                 feature_vector.extend([0.0] * (21 * 2))
 
+            # Face landmarks with reduced weight
             if results.face_landmarks:
                 face = results.face_landmarks
                 face_x = [lm.x for lm in face.landmark]
@@ -58,6 +63,7 @@ with mp_holistic.Holistic(static_image_mode=True, min_detection_confidence=0.3) 
             else:
                 feature_vector.extend([0.0] * (468 * 2))
 
+            # Pose landmarks
             if results.pose_landmarks:
                 pose = results.pose_landmarks
                 pose_x = [lm.x for lm in pose.landmark]
@@ -71,5 +77,8 @@ with mp_holistic.Holistic(static_image_mode=True, min_detection_confidence=0.3) 
             data.append(feature_vector)
             labels.append(dir_)
 
+# Save features and labels for training
 with open('data.pickle', 'wb') as f:
     pickle.dump({'data': data, 'labels': labels}, f)
+
+print("Feature extraction complete. Data saved to 'data.pickle'")
