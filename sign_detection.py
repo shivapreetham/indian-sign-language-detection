@@ -4,9 +4,9 @@ import numpy as np
 import pickle
 
 # Configuration
-WEIGHT_HAND = 3.0
-WEIGHT_FACE = 0.3
-WEIGHT_POSE = 0.4
+WEIGHT_HAND = 1.0
+WEIGHT_FACE = 0.1
+WEIGHT_POSE = 0.3
 FACE_LANDMARKS_TO_USE = [1, 4, 10]
 BUFFER_LENGTH = 10
 
@@ -16,6 +16,7 @@ with open('model.p', 'rb') as f:
 model = model_dict['model']
 scaler = model_dict['scaler']
 
+# Label mapping
 labels_dict = {
     0: 'ok/correct', 1: 'good', 2: 'two', 3: 'engineer',
     4: 'Nice to meet you', 5: 'alright', 6: 'God', 7: 'Walk',
