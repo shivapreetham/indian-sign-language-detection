@@ -5,8 +5,8 @@ import pickle
 
 # Configuration
 WEIGHT_HAND = 1.0
-WEIGHT_FACE = 0.1
-WEIGHT_POSE = 0.3
+WEIGHT_FACE = 0.3
+WEIGHT_POSE = 0.4
 FACE_LANDMARKS_TO_USE = [1, 4, 10]
 BUFFER_LENGTH = 10
 

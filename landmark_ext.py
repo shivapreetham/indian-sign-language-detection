@@ -1,132 +1,115 @@
+import os
+import pickle
 import cv2
 import mediapipe as mp
 import numpy as np
-import pickle
-from sklearn.preprocessing import StandardScaler
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score
 
-# Configuration values must match those used during training!
+# Configuration for weights and selected landmarks
 WEIGHT_HAND = 1.0
-WEIGHT_FACE = 0.1
-WEIGHT_POSE = 0.3
-FACE_LANDMARKS_TO_USE = [1, 4, 10]
-BUFFER_LENGTH = 10
+WEIGHT_FACE = 0.3    # Lowered face weight to reduce influence of facial expression
+WEIGHT_POSE = 0.4
 
-# Load the trained model and scaler
-with open('model.p', 'rb') as f:
-    model_dict = pickle.load(f)
-model = model_dict['model']
-scaler = model_dict['scaler']  # ✅ load pre-fitted scaler
+FACE_LANDMARKS_TO_USE = [1, 4, 10]  
 
-# Mapping from class indices to text labels (adjust as needed)
-labels_dict = {
-    0: 'ok', 1: 'good', 2: 'two', 3: 'engineer',
-    4: 'Nice to meet you', 5: 'alright', 6: 'God', 7: 'Walk',
-    8: 'sorry', 9: 'call', 10: 'here ', 11: 'light'
-}
+DATA_DIR = './data'
+data = []
+labels = []
 
 mp_holistic = mp.solutions.holistic
-mp_drawing = mp.solutions.drawing_utils
 
-def get_weighted_features(results):
-    features = []
+# Use a higher confidence threshold for static image mode
+with mp_holistic.Holistic(static_image_mode=True, min_detection_confidence=0.6) as holistic:
+    for dir_ in os.listdir(DATA_DIR):
+        dir_path = os.path.join(DATA_DIR, dir_)
+        if not os.path.isdir(dir_path):
+            continue
 
-    if results.left_hand_landmarks:
-        for lm in results.left_hand_landmarks.landmark:
-            features.append(lm.x * WEIGHT_HAND)
-            features.append(lm.y * WEIGHT_HAND)
-    else:
-        features.extend([0.0] * (21 * 2))
+        for img_path in os.listdir(dir_path):
+            img_file = os.path.join(dir_path, img_path)
+            img = cv2.imread(img_file)
+            if img is None:
+                continue
+            img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            results = holistic.process(img_rgb)
+            feature_vector = []
 
-    if results.right_hand_landmarks:
-        for lm in results.right_hand_landmarks.landmark:
-            features.append(lm.x * WEIGHT_HAND)
-            features.append(lm.y * WEIGHT_HAND)
-    else:
-        features.extend([0.0] * (21 * 2))
-
-    if results.face_landmarks:
-        face = results.face_landmarks
-        selected_face_x = [face.landmark[i].x for i in FACE_LANDMARKS_TO_USE]
-        selected_face_y = [face.landmark[i].y for i in FACE_LANDMARKS_TO_USE]
-        min_face_x = min(selected_face_x)
-        min_face_y = min(selected_face_y)
-        for i in FACE_LANDMARKS_TO_USE:
-            lm = face.landmark[i]
-            features.append((lm.x - min_face_x) * WEIGHT_FACE)
-            features.append((lm.y - min_face_y) * WEIGHT_FACE)
-    else:
-        features.extend([0.0] * (len(FACE_LANDMARKS_TO_USE) * 2))
-
-    if results.pose_landmarks:
-        pose = results.pose_landmarks
-        pose_x = [lm.x for lm in pose.landmark]
-        pose_y = [lm.y for lm in pose.landmark]
-        for lm in pose.landmark:
-            features.append((lm.x - min(pose_x)) * WEIGHT_POSE)
-            features.append((lm.y - min(pose_y)) * WEIGHT_POSE)
-    else:
-        features.extend([0.0] * (33 * 2))
-
-    return features
-
-def signDetection():
-    cap = cv2.VideoCapture(0)
-    feature_buffer = []
-
-    with mp_holistic.Holistic(
-            static_image_mode=False,
-            min_detection_confidence=0.6,
-            min_tracking_confidence=0.6) as holistic:
-        
-        while True:
-            ret, frame = cap.read()
-            if not ret:
-                break
-
-            frame = cv2.flip(frame, 1)
-            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            results = holistic.process(frame_rgb)
-
-            # Draw landmarks
-            if results.face_landmarks:
-                mp_drawing.draw_landmarks(
-                    frame, results.face_landmarks, mp_holistic.FACEMESH_TESSELATION)
-            if results.pose_landmarks:
-                mp_drawing.draw_landmarks(
-                    frame, results.pose_landmarks, mp_holistic.POSE_CONNECTIONS)
+            # Process left hand landmarks relative to face (if needed, or as is)
             if results.left_hand_landmarks:
-                mp_drawing.draw_landmarks(
-                    frame, results.left_hand_landmarks, mp_holistic.HAND_CONNECTIONS)
+                left = results.left_hand_landmarks
+                left_x = [lm.x for lm in left.landmark]
+                left_y = [lm.y for lm in left.landmark]
+                for lm in left.landmark:
+                    feature_vector.append((lm.x - min(left_x)) * WEIGHT_HAND)
+                    feature_vector.append((lm.y - min(left_y)) * WEIGHT_HAND)
+            else:
+                feature_vector.extend([0.0] * (21 * 2))
+
+            # Process right hand landmarks
             if results.right_hand_landmarks:
-                mp_drawing.draw_landmarks(
-                    frame, results.right_hand_landmarks, mp_holistic.HAND_CONNECTIONS)
+                right = results.right_hand_landmarks
+                right_x = [lm.x for lm in right.landmark]
+                right_y = [lm.y for lm in right.landmark]
+                for lm in right.landmark:
+                    feature_vector.append((lm.x - min(right_x)) * WEIGHT_HAND)
+                    feature_vector.append((lm.y - min(right_y)) * WEIGHT_HAND)
+            else:
+                feature_vector.extend([0.0] * (21 * 2))
 
-            # Feature extraction
-            features = get_weighted_features(results)
-            feature_buffer.append(features)
-            if len(feature_buffer) > BUFFER_LENGTH:
-                feature_buffer = feature_buffer[-BUFFER_LENGTH:]
+            # Process only a selected subset of face landmarks
+            if results.face_landmarks:
+                face = results.face_landmarks
+                selected_face_x = [face.landmark[i].x for i in FACE_LANDMARKS_TO_USE]
+                selected_face_y = [face.landmark[i].y for i in FACE_LANDMARKS_TO_USE]
+                min_face_x = min(selected_face_x)
+                min_face_y = min(selected_face_y)
+                for i in FACE_LANDMARKS_TO_USE:
+                    lm = face.landmark[i]
+                    feature_vector.append((lm.x - min_face_x) * WEIGHT_FACE)
+                    feature_vector.append((lm.y - min_face_y) * WEIGHT_FACE)
+            else:
+                feature_vector.extend([0.0] * (len(FACE_LANDMARKS_TO_USE) * 2))
 
-            if len(feature_buffer) >= BUFFER_LENGTH:
-                aggregated_features = np.mean(feature_buffer, axis=0).reshape(1, -1)
+            # Process pose landmarks (unchanged)
+            if results.pose_landmarks:
+                pose = results.pose_landmarks
+                pose_x = [lm.x for lm in pose.landmark]
+                pose_y = [lm.y for lm in pose.landmark]
+                for lm in pose.landmark:
+                    feature_vector.append((lm.x - min(pose_x)) * WEIGHT_POSE)
+                    feature_vector.append((lm.y - min(pose_y)) * WEIGHT_POSE)
+            else:
+                feature_vector.extend([0.0] * (33 * 2))
 
-                try:
-                    aggregated_features_scaled = scaler.transform(aggregated_features)  
-                    prediction = model.predict(aggregated_features_scaled)
-                    predicted_action = labels_dict.get(int(prediction[0]), "Unknown")
-                except Exception as e:
-                    predicted_action = "Error"
-                    print("Prediction error:", e)
+            data.append(feature_vector)
+            labels.append(dir_)
 
-                cv2.putText(frame, predicted_action, (50, 50),
-                            cv2.FONT_HERSHEY_SIMPLEX, 1.3, (0, 0, 0), 3, cv2.LINE_AA)
+# Save the processed data to a pickle file
+with open('data.pickle', 'wb') as f:
+    pickle.dump({'data': data, 'labels': labels}, f)
 
-            cv2.imshow('Action Detection', frame)
-            if cv2.waitKey(1) & 0xFF == ord('q'):
-                break
+# ---- Model Training ----
+# Load the feature data
+with open('data.pickle', 'rb') as f:
+    data_dict = pickle.load(f)
 
-    cap.release()
-    cv2.destroyAllWindows()
+data = np.asarray(data_dict['data'])
+labels = np.asarray(data_dict['labels'])
 
-if __name__ == '__main__':
-    signDetection()
+x_train, x_test, y_train, y_test = train_test_split(
+    data, labels, test_size=0.2, shuffle=True, stratify=labels)
+
+# Create and train the Random Forest classifier
+model = RandomForestClassifier(n_estimators=100, random_state=42)
+model.fit(x_train, y_train)
+
+# Evaluate the model
+y_predict = model.predict(x_test)
+score = accuracy_score(y_predict, y_test)
+print(f'{score*100:.2f}% of samples were classified correctly!')
+
+# Save the trained model
+with open('model.p', 'wb') as f:
+    pickle.dump({'model': model}, f)
