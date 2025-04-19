@@ -4,7 +4,7 @@ import numpy as np
 import pickle
 
 # Configuration
-WEIGHT_HAND = 1.0
+WEIGHT_HAND = 3.0
 WEIGHT_FACE = 0.3
 WEIGHT_POSE = 0.4
 FACE_LANDMARKS_TO_USE = [1, 4, 10]
@@ -16,11 +16,12 @@ with open('model.p', 'rb') as f:
 model = model_dict['model']
 scaler = model_dict['scaler']
 
-# Label mapping
 labels_dict = {
-    0: 'ok', 1: 'good', 2: 'two', 3: 'engineer',
+    0: 'ok/correct', 1: 'good', 2: 'two', 3: 'engineer',
     4: 'Nice to meet you', 5: 'alright', 6: 'God', 7: 'Walk',
-    8: 'sorry', 9: 'call', 10: 'here ', 11: 'light'
+    8: 'sorry', 9: 'call', 10: 'here ', 11: 'light', 12: 'namaste/pray', 
+    13: 'read', 14:'loss/headache',15: 'bond/love', 16:'strength/powerful' , 17: 'may i go to washroom' ,
+    18:'flower' , 19:'waiting for your action' , 20: 'drink/water', 21: 'food'
 }
 
 # MediaPipe setup

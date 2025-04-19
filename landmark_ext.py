@@ -8,7 +8,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
 
 # Configuration for weights and selected landmarks
-WEIGHT_HAND = 1.0
+WEIGHT_HAND = 3.0
 WEIGHT_FACE = 0.3    # Lowered face weight to reduce influence of facial expression
 WEIGHT_POSE = 0.4
 
