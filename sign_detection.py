@@ -2,13 +2,16 @@ import cv2
 import mediapipe as mp
 import numpy as np
 import pickle
+from collections import Counter
 
 # Configuration
 WEIGHT_HAND = 1.0
 WEIGHT_FACE = 0.1
 WEIGHT_POSE = 0.3
 FACE_LANDMARKS_TO_USE = [1, 4, 10]
-BUFFER_LENGTH = 10
+BUFFER_LENGTH = 15
+CONFIDENCE_THRESHOLD = 0.6
+VOTE_THRESHOLD = 0.6
 
 # Load model and scaler
 with open('model.p', 'rb') as f:
@@ -16,13 +19,14 @@ with open('model.p', 'rb') as f:
 model = model_dict['model']
 scaler = model_dict['scaler']
 
-# Label mapping
+# Label mapping - update this with your actual labels
 labels_dict = {
     0: 'ok/correct', 1: 'good', 2: 'two', 3: 'engineer',
     4: 'Nice to meet you', 5: 'alright', 6: 'God', 7: 'Walk',
-    8: 'sorry', 9: 'call', 10: 'here ', 11: 'light', 12: 'namaste/pray', 
-    13: 'read', 14:'loss/headache',15: 'bond/love', 16:'strength/powerful' , 17: 'may i go to washroom' ,
-    18:'flower' , 19:'waiting for your action' , 20: 'drink/water', 21: 'food'
+    8: 'sorry', 9: 'call', 10: 'here', 11: 'light', 12: 'namaste/pray', 
+    13: 'read', 14: 'loss/headache', 15: 'bond/love', 16: 'strength/powerful',
+    17: 'may i go to washroom', 18: 'flower', 19: 'waiting for your action',
+    20: 'drink/water', 21: 'food', 22: 'unknown'
 }
 
 # MediaPipe setup
@@ -55,36 +59,52 @@ def draw_fingers(hand_landmarks, frame, handedness='Left'):
 def get_weighted_features(results):
     features = []
     
+    # Process left hand landmarks
     if results.left_hand_landmarks:
-        for lm in results.left_hand_landmarks.landmark:
-            features.extend([lm.x * WEIGHT_HAND, lm.y * WEIGHT_HAND])
+        left = results.left_hand_landmarks
+        left_x = [lm.x for lm in left.landmark]
+        left_y = [lm.y for lm in left.landmark]
+        min_left_x, min_left_y = min(left_x), min(left_y)
+        for lm in left.landmark:
+            features.append((lm.x - min_left_x) * WEIGHT_HAND)
+            features.append((lm.y - min_left_y) * WEIGHT_HAND)
     else:
         features.extend([0.0] * (21 * 2))
 
+    # Process right hand landmarks
     if results.right_hand_landmarks:
-        for lm in results.right_hand_landmarks.landmark:
-            features.extend([lm.x * WEIGHT_HAND, lm.y * WEIGHT_HAND])
+        right = results.right_hand_landmarks
+        right_x = [lm.x for lm in right.landmark]
+        right_y = [lm.y for lm in right.landmark]
+        min_right_x, min_right_y = min(right_x), min(right_y)
+        for lm in right.landmark:
+            features.append((lm.x - min_right_x) * WEIGHT_HAND)
+            features.append((lm.y - min_right_y) * WEIGHT_HAND)
     else:
         features.extend([0.0] * (21 * 2))
         
+    # Process face landmarks
     if results.face_landmarks:
         face = results.face_landmarks
-        selected_x = [face.landmark[i].x for i in FACE_LANDMARKS_TO_USE]
-        selected_y = [face.landmark[i].y for i in FACE_LANDMARKS_TO_USE]
-        min_x, min_y = min(selected_x), min(selected_y)
+        selected_face_x = [face.landmark[i].x for i in FACE_LANDMARKS_TO_USE]
+        selected_face_y = [face.landmark[i].y for i in FACE_LANDMARKS_TO_USE]
+        min_face_x, min_face_y = min(selected_face_x), min(selected_face_y)
         for i in FACE_LANDMARKS_TO_USE:
             lm = face.landmark[i]
-            features.extend([(lm.x - min_x) * WEIGHT_FACE, (lm.y - min_y) * WEIGHT_FACE])
+            features.append((lm.x - min_face_x) * WEIGHT_FACE)
+            features.append((lm.y - min_face_y) * WEIGHT_FACE)
     else:
         features.extend([0.0] * (len(FACE_LANDMARKS_TO_USE) * 2))
         
+    # Process pose landmarks
     if results.pose_landmarks:
         pose = results.pose_landmarks
         pose_x = [lm.x for lm in pose.landmark]
         pose_y = [lm.y for lm in pose.landmark]
-        min_px, min_py = min(pose_x), min(pose_y)
+        min_pose_x, min_pose_y = min(pose_x), min(pose_y)
         for lm in pose.landmark:
-            features.extend([(lm.x - min_px) * WEIGHT_POSE, (lm.y - min_py) * WEIGHT_POSE])
+            features.append((lm.x - min_pose_x) * WEIGHT_POSE)
+            features.append((lm.y - min_pose_y) * WEIGHT_POSE)
     else:
         features.extend([0.0] * (33 * 2))
 
@@ -93,6 +113,7 @@ def get_weighted_features(results):
 def signDetection():
     cap = cv2.VideoCapture(0)
     buffer = []
+    recent_predictions = []
 
     with mp_holistic.Holistic(
         static_image_mode=False,
@@ -134,14 +155,44 @@ def signDetection():
             if len(buffer) >= BUFFER_LENGTH:
                 mean_features = np.mean(buffer, axis=0).reshape(1, -1)
                 try:
+                    # Scale the features
                     scaled = scaler.transform(mean_features)
+                    
+                    # Get prediction and probability
                     prediction = model.predict(scaled)
-                    label = labels_dict.get(int(prediction[0]), "Unknown")
+                    probabilities = model.predict_proba(scaled)[0]
+                    pred_idx = np.argmax(probabilities)
+                    confidence = probabilities[pred_idx]
+                    
+                    # Add to recent predictions if confidence is high enough
+                    if confidence >= CONFIDENCE_THRESHOLD:
+                        recent_predictions.append(int(prediction[0]))
+                        if len(recent_predictions) > 5:
+                            recent_predictions.pop(0)
+                        
+                        # Use voting to determine the final prediction
+                        if recent_predictions:
+                            vote_counts = Counter(recent_predictions)
+                            top_vote = vote_counts.most_common(1)[0]
+                            top_class, vote_count = top_vote
+                            
+                            # Only display if there's strong consensus
+                            if vote_count / len(recent_predictions) >= VOTE_THRESHOLD:
+                                label = labels_dict.get(top_class, "Unknown")
+                                cv2.putText(frame, f"{label} ({confidence:.2f})", 
+                                           (20, 50), cv2.FONT_HERSHEY_SIMPLEX,
+                                           1.2, (0, 0, 255), 3, cv2.LINE_AA)
+                    else:
+                        # Low confidence
+                        cv2.putText(frame, "Waiting for clear gesture...", 
+                                   (20, 50), cv2.FONT_HERSHEY_SIMPLEX,
+                                   1.0, (0, 255, 255), 2, cv2.LINE_AA)
+                        
                 except Exception as e:
                     print("Prediction error:", e)
-                    label = "Error"
-                cv2.putText(frame, label, (20, 50), cv2.FONT_HERSHEY_SIMPLEX,
-                            1.2, (0, 0, 0), 3, cv2.LINE_AA)
+                    cv2.putText(frame, f"Error: {str(e)}", 
+                               (20, 50), cv2.FONT_HERSHEY_SIMPLEX,
+                               0.7, (0, 0, 255), 2, cv2.LINE_AA)
 
             cv2.imshow("Sign Detection", frame)
             if cv2.waitKey(1) & 0xFF == ord('q'):
