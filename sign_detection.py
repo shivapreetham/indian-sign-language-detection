@@ -3,36 +3,24 @@ import mediapipe as mp
 import numpy as np
 import pickle
 
-# Set feature weights (face weight reduced)
+# Configuration values must match those used during training!
 WEIGHT_HAND = 1.0
-WEIGHT_FACE = 0.1   # Reduced face weight
+WEIGHT_FACE = 0.1    # Ensure same lower weight is used here
 WEIGHT_POSE = 0.3
+FACE_LANDMARKS_TO_USE = [1, 4, 10]  # Use the same indices
 
 BUFFER_LENGTH = 10
 
-# Load the trained model, scaler (and PCA if used)
+# Load the trained model
 with open('model.p', 'rb') as f:
     model_dict = pickle.load(f)
 model = model_dict['model']
-scaler = model_dict['scaler']
-# If PCA was used during training, load it here too:
-# pca = model_dict['pca']
 
-# Mapping numerical labels to action names.
+# Mapping from class indices to text labels (adjust as needed)
 labels_dict = {
-    0: 'hello', 1: 'balle balle', 2: 'thinking', 3: 'i love this',
-    4: 'had you food?', 5: 'i am strong', 6: 'shut up', 7: 'attack on titan',
-    8: 'namaste', 9: 'perfect', 10: 'how are you', 11: 'i am good/agree/ok',
-    12: 'a student', 13: 'wait', 14: 'i am',
-    15: 'At a university', 16: 'Computer Student', 17: 'Pursuing Engineering',
-    18: 'Passionate about Innovation', 19: 'Could you please repeat?', 20: 'NO',
-    21: 'I got it', 22: 'Thank you', 23: 'Nice to meet you',
-    24: 'Good bye', 25: 'See you soon!',
-    26: 'God', 27: 'walk', 28: 'sleep',
-    29: 'Time', 30: 'Hearing Aid', 31: 'Sick',
-    32: 'Drink', 33: 'sorry', 34: 'call',
-    35: 'here', 36: '', 37: '',
-    38: '', 39: '', 40: '',
+    0: 'ok', 1: 'good', 2: 'two', 3: 'engineer',
+    4: 'Nice to meet you', 5: 'alright', 6: 'God', 7: 'Walk',
+    8: 'sorry', 9: 'call', 10: 'here ', 11: 'light'
 }
 
 mp_holistic = mp.solutions.holistic
@@ -41,41 +29,38 @@ mp_drawing = mp.solutions.drawing_utils
 def get_weighted_features(results):
     """Extract weighted features from landmarks."""
     features = []
-
-    # Left hand landmarks
+    
+    # For both hands, use positions relative to face anchor (if desired)
     if results.left_hand_landmarks:
-        left = results.left_hand_landmarks
-        left_x = [lm.x for lm in left.landmark]
-        left_y = [lm.y for lm in left.landmark]
-        for lm in left.landmark:
-            features.append((lm.x - min(left_x)) * WEIGHT_HAND)
-            features.append((lm.y - min(left_y)) * WEIGHT_HAND)
+        for lm in results.left_hand_landmarks.landmark:
+            features.append(lm.x * WEIGHT_HAND)
+            features.append(lm.y * WEIGHT_HAND)
     else:
         features.extend([0.0] * (21 * 2))
 
     # Right hand landmarks
     if results.right_hand_landmarks:
-        right = results.right_hand_landmarks
-        right_x = [lm.x for lm in right.landmark]
-        right_y = [lm.y for lm in right.landmark]
-        for lm in right.landmark:
-            features.append((lm.x - min(right_x)) * WEIGHT_HAND)
-            features.append((lm.y - min(right_y)) * WEIGHT_HAND)
+        for lm in results.right_hand_landmarks.landmark:
+            features.append(lm.x * WEIGHT_HAND)
+            features.append(lm.y * WEIGHT_HAND)
     else:
         features.extend([0.0] * (21 * 2))
-
-    # Face landmarks with reduced weight
+        
+    # For the face, use only selected landmarks
     if results.face_landmarks:
         face = results.face_landmarks
-        face_x = [lm.x for lm in face.landmark]
-        face_y = [lm.y for lm in face.landmark]
-        for lm in face.landmark:
-            features.append((lm.x - min(face_x)) * WEIGHT_FACE)
-            features.append((lm.y - min(face_y)) * WEIGHT_FACE)
+        selected_face_x = [face.landmark[i].x for i in FACE_LANDMARKS_TO_USE]
+        selected_face_y = [face.landmark[i].y for i in FACE_LANDMARKS_TO_USE]
+        min_face_x = min(selected_face_x)
+        min_face_y = min(selected_face_y)
+        for i in FACE_LANDMARKS_TO_USE:
+            lm = face.landmark[i]
+            features.append((lm.x - min_face_x) * WEIGHT_FACE)
+            features.append((lm.y - min_face_y) * WEIGHT_FACE)
     else:
-        features.extend([0.0] * (468 * 2))
-
-    # Pose landmarks
+        features.extend([0.0] * (len(FACE_LANDMARKS_TO_USE) * 2))
+        
+    # Process pose landmarks (unchanged)
     if results.pose_landmarks:
         pose = results.pose_landmarks
         pose_x = [lm.x for lm in pose.landmark]
@@ -102,12 +87,12 @@ def signDetection():
             ret, frame = cap.read()
             if not ret:
                 break
-
-            frame = cv2.flip(frame, 1)
+            
+            frame = cv2.flip(frame, 1)  
             frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             results = holistic.process(frame_rgb)
             
-            # Visualize landmarks for clarity
+            # Draw landmarks for better visualization
             if results.face_landmarks:
                 mp_drawing.draw_landmarks(
                     frame, results.face_landmarks, mp_holistic.FACEMESH_TESSELATION,
@@ -128,8 +113,8 @@ def signDetection():
                     frame, results.right_hand_landmarks, mp_holistic.HAND_CONNECTIONS,
                     landmark_drawing_spec=mp_drawing.DrawingSpec(color=(255, 0, 0), thickness=2, circle_radius=2),
                     connection_drawing_spec=mp_drawing.DrawingSpec(color=(200, 0, 0), thickness=2))
-            
-            # Extract features from the current frame and update buffer
+
+            # Extract features and buffer them to smooth out predictions
             features = get_weighted_features(results)
             feature_buffer.append(features)
             if len(feature_buffer) > BUFFER_LENGTH:
@@ -152,7 +137,7 @@ def signDetection():
                 cv2.putText(frame, predicted_action, (50, 50),
                             cv2.FONT_HERSHEY_SIMPLEX, 1.3, (0, 0, 0), 3, cv2.LINE_AA)
             
-            cv2.imshow('Action Detection (Holistic Tracking)', frame)
+            cv2.imshow('Action Detection', frame)
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
         
