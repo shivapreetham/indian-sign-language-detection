@@ -2,6 +2,7 @@ import cv2
 import mediapipe as mp
 import numpy as np
 import pickle
+from sklearn.preprocessing import StandardScaler
 
 # Configuration values must match those used during training!
 WEIGHT_HAND = 1.0
@@ -124,6 +125,7 @@ def signDetection():
                 aggregated_features = np.mean(feature_buffer, axis=0)
                 aggregated_features = np.asarray(aggregated_features).reshape(1, -1)
                 # Scale the features using the saved scaler
+                scaler = StandardScaler()
                 aggregated_features_scaled = scaler.transform(aggregated_features)
                 # If PCA was used during training, apply it as well:
                 # aggregated_features_scaled = pca.transform(aggregated_features_scaled)
