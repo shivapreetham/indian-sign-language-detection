@@ -4,6 +4,10 @@ import numpy as np
 import pickle
 from collections import Counter
 
+# — NEW IMPORTS —
+import requests
+import pyttsx3
+
 # Configuration
 WEIGHT_HAND = 1.0
 WEIGHT_FACE = 0.1
@@ -37,13 +41,14 @@ mp_drawing = mp.solutions.drawing_utils
 FINGER_COLORS = [(255, 0, 0), (0, 255, 0), (255, 255, 0),
                  (255, 0, 255), (0, 255, 255)]
 
+# Draw colored finger connections
 def draw_fingers(hand_landmarks, frame, handedness='Left'):
     fingers = [
-        [0, 1, 2, 3, 4],     # Thumb
-        [0, 5, 6, 7, 8],     # Index
-        [0, 9, 10, 11, 12],  # Middle
-        [0, 13, 14, 15, 16], # Ring
-        [0, 17, 18, 19, 20]  # Pinky
+        [0, 1, 2, 3, 4],
+        [0, 5, 6, 7, 8],
+        [0, 9, 10, 11, 12],
+        [0, 13, 14, 15, 16],
+        [0, 17, 18, 19, 20]
     ]
     h, w, _ = frame.shape
     for i, finger in enumerate(fingers):
@@ -56,64 +61,67 @@ def draw_fingers(hand_landmarks, frame, handedness='Left'):
             cv2.line(frame, (x1, y1), (x2, y2), color, 2)
             cv2.circle(frame, (x1, y1), 3, color, -1)
 
+# Extract weighted features from landmarks
 def get_weighted_features(results):
     features = []
-    
-    # Process left hand landmarks
+    # Left hand
     if results.left_hand_landmarks:
-        left = results.left_hand_landmarks
-        left_x = [lm.x for lm in left.landmark]
-        left_y = [lm.y for lm in left.landmark]
-        min_left_x, min_left_y = min(left_x), min(left_y)
-        for lm in left.landmark:
-            features.append((lm.x - min_left_x) * WEIGHT_HAND)
-            features.append((lm.y - min_left_y) * WEIGHT_HAND)
+        xs = [lm.x for lm in results.left_hand_landmarks.landmark]
+        ys = [lm.y for lm in results.left_hand_landmarks.landmark]
+        minx, miny = min(xs), min(ys)
+        for lm in results.left_hand_landmarks.landmark:
+            features += [(lm.x - minx) * WEIGHT_HAND, (lm.y - miny) * WEIGHT_HAND]
     else:
-        features.extend([0.0] * (21 * 2))
-
-    # Process right hand landmarks
+        features += [0.0] * 42
+    # Right hand
     if results.right_hand_landmarks:
-        right = results.right_hand_landmarks
-        right_x = [lm.x for lm in right.landmark]
-        right_y = [lm.y for lm in right.landmark]
-        min_right_x, min_right_y = min(right_x), min(right_y)
-        for lm in right.landmark:
-            features.append((lm.x - min_right_x) * WEIGHT_HAND)
-            features.append((lm.y - min_right_y) * WEIGHT_HAND)
+        xs = [lm.x for lm in results.right_hand_landmarks.landmark]
+        ys = [lm.y for lm in results.right_hand_landmarks.landmark]
+        minx, miny = min(xs), min(ys)
+        for lm in results.right_hand_landmarks.landmark:
+            features += [(lm.x - minx) * WEIGHT_HAND, (lm.y - miny) * WEIGHT_HAND]
     else:
-        features.extend([0.0] * (21 * 2))
-        
-    # Process face landmarks
+        features += [0.0] * 42
+    # Face landmarks
     if results.face_landmarks:
-        face = results.face_landmarks
-        selected_face_x = [face.landmark[i].x for i in FACE_LANDMARKS_TO_USE]
-        selected_face_y = [face.landmark[i].y for i in FACE_LANDMARKS_TO_USE]
-        min_face_x, min_face_y = min(selected_face_x), min(selected_face_y)
+        sel_x = [results.face_landmarks.landmark[i].x for i in FACE_LANDMARKS_TO_USE]
+        sel_y = [results.face_landmarks.landmark[i].y for i in FACE_LANDMARKS_TO_USE]
+        minx, miny = min(sel_x), min(sel_y)
         for i in FACE_LANDMARKS_TO_USE:
-            lm = face.landmark[i]
-            features.append((lm.x - min_face_x) * WEIGHT_FACE)
-            features.append((lm.y - min_face_y) * WEIGHT_FACE)
+            lm = results.face_landmarks.landmark[i]
+            features += [(lm.x - minx) * WEIGHT_FACE, (lm.y - miny) * WEIGHT_FACE]
     else:
-        features.extend([0.0] * (len(FACE_LANDMARKS_TO_USE) * 2))
-        
-    # Process pose landmarks
+        features += [0.0] * (len(FACE_LANDMARKS_TO_USE) * 2)
+    # Pose landmarks
     if results.pose_landmarks:
-        pose = results.pose_landmarks
-        pose_x = [lm.x for lm in pose.landmark]
-        pose_y = [lm.y for lm in pose.landmark]
-        min_pose_x, min_pose_y = min(pose_x), min(pose_y)
-        for lm in pose.landmark:
-            features.append((lm.x - min_pose_x) * WEIGHT_POSE)
-            features.append((lm.y - min_pose_y) * WEIGHT_POSE)
+        xs = [lm.x for lm in results.pose_landmarks.landmark]
+        ys = [lm.y for lm in results.pose_landmarks.landmark]
+        minx, miny = min(xs), min(ys)
+        for lm in results.pose_landmarks.landmark:
+            features += [(lm.x - minx) * WEIGHT_POSE, (lm.y - miny) * WEIGHT_POSE]
     else:
-        features.extend([0.0] * (33 * 2))
-
+        features += [0.0] * 66
     return features
 
+# Draw a semi-transparent overlay and text
+def draw_overlay(frame, text, ypos=80):
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    scale = 0.7
+    thickness = 2
+    (w, h), _ = cv2.getTextSize(text, font, scale, thickness)
+    x, y = 20, ypos
+    overlay = frame.copy()
+    cv2.rectangle(overlay, (x-10, y-h-10), (x+w+10, y+10), (0, 0, 0), cv2.FILLED)
+    cv2.addWeighted(overlay, 0.7, frame, 0.3, 0, frame)
+    cv2.putText(frame, text, (x, y), font, scale, (255, 255, 255), thickness, cv2.LINE_AA)
+
+# Main detection function
 def signDetection():
     cap = cv2.VideoCapture(0)
     buffer = []
     recent_predictions = []
+    final_predictions = []
+    tts = pyttsx3.init()
 
     with mp_holistic.Holistic(
         static_image_mode=False,
@@ -128,74 +136,87 @@ def signDetection():
             rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             results = holistic.process(rgb)
 
-            # Draw pose landmarks
+            # Draw landmarks
             if results.pose_landmarks:
                 mp_drawing.draw_landmarks(frame, results.pose_landmarks, mp_holistic.POSE_CONNECTIONS)
-
-            # Draw simple face dots
             if results.face_landmarks:
                 h, w, _ = frame.shape
                 for i in FACE_LANDMARKS_TO_USE:
                     pt = results.face_landmarks.landmark[i]
-                    cx, cy = int(pt.x * w), int(pt.y * h)
-                    cv2.circle(frame, (cx, cy), 3, (0, 255, 255), -1)
-
-            # Draw custom colored fingers
+                    cv2.circle(frame, (int(pt.x*w), int(pt.y*h)), 3, (0,255,255), -1)
             if results.left_hand_landmarks:
-                draw_fingers(results.left_hand_landmarks, frame, 'Left')
+                draw_fingers(results.left_hand_landmarks, frame)
             if results.right_hand_landmarks:
-                draw_fingers(results.right_hand_landmarks, frame, 'Right')
+                draw_fingers(results.right_hand_landmarks, frame)
 
-            # Process features
+            # Feature buffering
             features = get_weighted_features(results)
             buffer.append(features)
             if len(buffer) > BUFFER_LENGTH:
                 buffer = buffer[-BUFFER_LENGTH:]
 
+            # Prediction and voting
             if len(buffer) >= BUFFER_LENGTH:
-                mean_features = np.mean(buffer, axis=0).reshape(1, -1)
+                mean_feats = np.mean(buffer, axis=0).reshape(1, -1)
                 try:
-                    # Scale the features
-                    scaled = scaler.transform(mean_features)
-                    
-                    # Get prediction and probability
+                    scaled = scaler.transform(mean_feats)
                     prediction = model.predict(scaled)
                     probabilities = model.predict_proba(scaled)[0]
                     pred_idx = np.argmax(probabilities)
                     confidence = probabilities[pred_idx]
-                    
-                    # Add to recent predictions if confidence is high enough
+
                     if confidence >= CONFIDENCE_THRESHOLD:
                         recent_predictions.append(int(prediction[0]))
                         if len(recent_predictions) > 5:
                             recent_predictions.pop(0)
-                        
-                        # Use voting to determine the final prediction
                         if recent_predictions:
-                            vote_counts = Counter(recent_predictions)
-                            top_vote = vote_counts.most_common(1)[0]
-                            top_class, vote_count = top_vote
-                            
-                            # Only display if there's strong consensus
+                            top_class, vote_count = Counter(recent_predictions).most_common(1)[0]
                             if vote_count / len(recent_predictions) >= VOTE_THRESHOLD:
                                 label = labels_dict.get(top_class, "Unknown")
+                                final_predictions.append(label)
                                 cv2.putText(frame, f"{label} ({confidence:.2f})", 
                                            (20, 50), cv2.FONT_HERSHEY_SIMPLEX,
                                            1.2, (0, 0, 255), 3, cv2.LINE_AA)
                     else:
-                        # Low confidence
                         cv2.putText(frame, "Waiting for clear gesture...", 
                                    (20, 50), cv2.FONT_HERSHEY_SIMPLEX,
                                    1.0, (0, 255, 255), 2, cv2.LINE_AA)
-                        
                 except Exception as e:
                     print("Prediction error:", e)
                     cv2.putText(frame, f"Error: {str(e)}", 
                                (20, 50), cv2.FONT_HERSHEY_SIMPLEX,
                                0.7, (0, 0, 255), 2, cv2.LINE_AA)
 
+            # Instruction overlay
+            cv2.putText(frame, "Press G to interpret sequence ↓", 
+                        (20, 450), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+
             cv2.imshow("Sign Detection", frame)
-            if cv2.waitKey(1) & 0xFF == ord('q'):
+            key = cv2.waitKey(1) & 0xFF
+
+            # On 'g', call Gemini
+            if key == ord('g') and final_predictions:
+                prompt = (
+                    "You are an expert at converting sequences of raw sign-language labels into fluent, human-readable English. You are helping a poor person who cant speak or hear communicate with normal people"
+                    f"Given this list of words: {final_predictions}, return one single paragraph adding all the necessary context relatable to the words capturing their meaning. you are supposed to put emotiions into the words , since they cant be captured by the words."
+                )
+                try:
+                    resp = requests.post(
+                        "http://localhost:8000/gemini",
+                        json={"message": prompt}
+                    )
+                    resp.raise_for_status()
+                    ai_text = resp.json().get("response", "")
+                    draw_overlay(frame, ai_text, ypos=80)
+                    tts.say(ai_text)
+                    tts.runAndWait()
+                except Exception as e:
+                    print("Error calling Gemini API:", e)
+                finally:
+                    final_predictions.clear()
+
+            # Quit
+            if key == ord('q'):
                 break
 
     cap.release()
@@ -203,13 +224,3 @@ def signDetection():
 
 if __name__ == '__main__':
     signDetection()
-
-# 1. to have an array and keep on pushing the predictions onto the array  , 
-# and on pressing a key, it will sendd the current array to gemini api ,
-# we prompt it that we are sedninf the prediction,we need to make better meaning out of the predictions made
-# hence the sign language will be more comprehensible , with gemini have phrased the predictions properly
-# we can even use text to speeech api to convert the comprehensible sign language to speech
-
-# 2. we need to integrate the gui , 
-# along with the guessing the actions of the user
-# ie, speech to action , should also be integrated
