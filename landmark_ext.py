@@ -3,9 +3,6 @@ import pickle
 import cv2
 import mediapipe as mp
 import numpy as np
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score
 
 # Configuration for weights and selected landmarks
 WEIGHT_HAND = 1.0
@@ -14,7 +11,8 @@ WEIGHT_POSE = 0.3
 
 FACE_LANDMARKS_TO_USE = [1, 4, 10]  
 
-DATA_DIR = './data'
+# Choose the data directory - original or augmented
+DATA_DIR = './augmented_data'  # or './data' if you're not using augmentation
 data = []
 labels = []
 
@@ -36,14 +34,16 @@ with mp_holistic.Holistic(static_image_mode=True, min_detection_confidence=0.6) 
             results = holistic.process(img_rgb)
             feature_vector = []
 
-            # Process left hand landmarks relative to face (if needed, or as is)
+            # Process left hand landmarks relative to their min values
             if results.left_hand_landmarks:
                 left = results.left_hand_landmarks
                 left_x = [lm.x for lm in left.landmark]
                 left_y = [lm.y for lm in left.landmark]
+                min_left_x = min(left_x)
+                min_left_y = min(left_y)
                 for lm in left.landmark:
-                    feature_vector.append((lm.x - min(left_x)) * WEIGHT_HAND)
-                    feature_vector.append((lm.y - min(left_y)) * WEIGHT_HAND)
+                    feature_vector.append((lm.x - min_left_x) * WEIGHT_HAND)
+                    feature_vector.append((lm.y - min_left_y) * WEIGHT_HAND)
             else:
                 feature_vector.extend([0.0] * (21 * 2))
 
@@ -52,9 +52,11 @@ with mp_holistic.Holistic(static_image_mode=True, min_detection_confidence=0.6) 
                 right = results.right_hand_landmarks
                 right_x = [lm.x for lm in right.landmark]
                 right_y = [lm.y for lm in right.landmark]
+                min_right_x = min(right_x)
+                min_right_y = min(right_y)
                 for lm in right.landmark:
-                    feature_vector.append((lm.x - min(right_x)) * WEIGHT_HAND)
-                    feature_vector.append((lm.y - min(right_y)) * WEIGHT_HAND)
+                    feature_vector.append((lm.x - min_right_x) * WEIGHT_HAND)
+                    feature_vector.append((lm.y - min_right_y) * WEIGHT_HAND)
             else:
                 feature_vector.extend([0.0] * (21 * 2))
 
@@ -72,14 +74,16 @@ with mp_holistic.Holistic(static_image_mode=True, min_detection_confidence=0.6) 
             else:
                 feature_vector.extend([0.0] * (len(FACE_LANDMARKS_TO_USE) * 2))
 
-            # Process pose landmarks (unchanged)
+            # Process pose landmarks
             if results.pose_landmarks:
                 pose = results.pose_landmarks
                 pose_x = [lm.x for lm in pose.landmark]
                 pose_y = [lm.y for lm in pose.landmark]
+                min_pose_x = min(pose_x)
+                min_pose_y = min(pose_y)
                 for lm in pose.landmark:
-                    feature_vector.append((lm.x - min(pose_x)) * WEIGHT_POSE)
-                    feature_vector.append((lm.y - min(pose_y)) * WEIGHT_POSE)
+                    feature_vector.append((lm.x - min_pose_x) * WEIGHT_POSE)
+                    feature_vector.append((lm.y - min_pose_y) * WEIGHT_POSE)
             else:
                 feature_vector.extend([0.0] * (33 * 2))
 
@@ -90,26 +94,5 @@ with mp_holistic.Holistic(static_image_mode=True, min_detection_confidence=0.6) 
 with open('data.pickle', 'wb') as f:
     pickle.dump({'data': data, 'labels': labels}, f)
 
-# ---- Model Training ----
-# Load the feature data
-with open('data.pickle', 'rb') as f:
-    data_dict = pickle.load(f)
-
-data = np.asarray(data_dict['data'])
-labels = np.asarray(data_dict['labels'])
-
-x_train, x_test, y_train, y_test = train_test_split(
-    data, labels, test_size=0.2, shuffle=True, stratify=labels)
-
-# Create and train the Random Forest classifier
-model = RandomForestClassifier(n_estimators=100, random_state=42)
-model.fit(x_train, y_train)
-
-# Evaluate the model
-y_predict = model.predict(x_test)
-score = accuracy_score(y_predict, y_test)
-print(f'{score*100:.2f}% of samples were classified correctly!')
-
-# Save the trained model
-with open('model.p', 'wb') as f:
-    pickle.dump({'model': model}, f)
+print(f"Extracted features from {len(data)} images across {len(set(labels))} classes")
+print("Data saved to data.pickle")
