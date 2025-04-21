@@ -203,3 +203,13 @@ def signDetection():
 
 if __name__ == '__main__':
     signDetection()
+
+# 1. to have an array and keep on pushing the predictions onto the array  , 
+# and on pressing a key, it will sendd the current array to gemini api ,
+# we prompt it that we are sedninf the prediction,we need to make better meaning out of the predictions made
+# hence the sign language will be more comprehensible , with gemini have phrased the predictions properly
+# we can even use text to speeech api to convert the comprehensible sign language to speech
+
+# 2. we need to integrate the gui , 
+# along with the guessing the actions of the user
+# ie, speech to action , should also be integrated
