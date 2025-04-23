@@ -1,7 +1,6 @@
 import pickle
 import numpy as np
 import matplotlib.pyplot as plt
-import seaborn as sns
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split, StratifiedKFold, GridSearchCV
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
@@ -62,6 +61,17 @@ for fold, (train_idx, val_idx) in enumerate(cv.split(x_train_scaled, y_train)):
 
 print(f"Average validation accuracy: {np.mean(val_scores)*100:.2f}%")
 
+# Plot validation accuracy per fold
+plt.figure(figsize=(8, 4))
+plt.plot(range(1, len(val_scores)+1), val_scores, marker='o')
+plt.title('Validation Accuracy per Fold')
+plt.xlabel('Fold')
+plt.ylabel('Accuracy')
+plt.xticks(range(1, len(val_scores)+1))
+plt.ylim(0, 1)
+plt.tight_layout()
+plt.show()
+
 # Final training on all training data
 best_rf.fit(x_train_scaled, y_train)
 
@@ -69,18 +79,34 @@ best_rf.fit(x_train_scaled, y_train)
 y_pred = best_rf.predict(x_test_scaled)
 conf_matrix = confusion_matrix(y_test, y_pred)
 
-# Plot and save confusion matrix
-plt.figure(figsize=(12, 10))
-sns.heatmap(conf_matrix, annot=True, fmt='d', cmap='Blues')
+# Plot confusion matrix using matplotlib
+plt.figure(figsize=(10, 8))
+plt.imshow(conf_matrix, interpolation='nearest', aspect='auto')
+plt.title('Confusion Matrix')
+plt.colorbar()
 plt.xlabel('Predicted Label')
 plt.ylabel('True Label')
-plt.title('Confusion Matrix')
-plt.savefig('confusion_matrix.png')
-plt.close()
+plt.xticks(np.arange(len(np.unique(labels))), np.unique(labels), rotation=45)
+plt.yticks(np.arange(len(np.unique(labels))), np.unique(labels))
+plt.tight_layout()
+plt.show()
 
 # Print classification report
 print("\nClassification Report:")
 print(classification_report(y_test, y_pred))
+
+# Save confusion matrix plot
+plt.figure(figsize=(10, 8))
+plt.imshow(conf_matrix, interpolation='nearest', aspect='auto')
+plt.title('Confusion Matrix')
+plt.colorbar()
+plt.xlabel('Predicted Label')
+plt.ylabel('True Label')
+plt.xticks(np.arange(len(np.unique(labels))), np.unique(labels), rotation=45)
+plt.yticks(np.arange(len(np.unique(labels))), np.unique(labels))
+plt.tight_layout()
+plt.savefig('confusion_matrix.png')
+plt.close()
 
 # Save feature importances
 feature_importances = best_rf.feature_importances_
@@ -90,16 +116,29 @@ top_20_idx = sorted_idx[:20]
 # Plot feature importances
 plt.figure(figsize=(10, 6))
 plt.bar(range(20), feature_importances[top_20_idx])
+plt.xticks(range(20), top_20_idx, rotation=45)
 plt.title('Top 20 Feature Importances')
+plt.xlabel('Feature Index')
+plt.ylabel('Importance')
+plt.tight_layout()
+plt.show()
+
+# Save feature importances plot
+plt.figure(figsize=(10, 6))
+plt.bar(range(20), feature_importances[top_20_idx])
+plt.xticks(range(20), top_20_idx, rotation=45)
+plt.title('Top 20 Feature Importances')
+plt.xlabel('Feature Index')
+plt.ylabel('Importance')
+plt.tight_layout()
 plt.savefig('feature_importances.png')
 plt.close()
 
 # Evaluate the best model on the test set
-y_predict = best_rf.predict(x_test_scaled)
-score = accuracy_score(y_predict, y_test)
-print('{}% of samples classified correctly on test data!'.format(score * 100))
+score = accuracy_score(y_test, y_pred)
+print(f'{score * 100:.2f}% of samples classified correctly on test data!')
 
-# Save the best model, scaler, for inference
+# Save the best model and scaler for inference
 with open('model.p', 'wb') as f:
     pickle.dump({
         'model': best_rf,

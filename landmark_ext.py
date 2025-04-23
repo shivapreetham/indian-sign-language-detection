@@ -3,16 +3,19 @@ import pickle
 import cv2
 import mediapipe as mp
 import numpy as np
+import matplotlib.pyplot as plt
+from collections import Counter
 
 # Configuration for weights and selected landmarks
 WEIGHT_HAND = 1.0
 WEIGHT_FACE = 0.1
 WEIGHT_POSE = 0.3
 
-FACE_LANDMARKS_TO_USE = [1, 4, 10]  
+FACE_LANDMARKS_TO_USE = [1, 4, 10]
 
 # Choose the data directory - original or augmented
 DATA_DIR = './augmented_data'  # or './data' if you're not using augmentation
+
 data = []
 labels = []
 
@@ -32,62 +35,58 @@ with mp_holistic.Holistic(static_image_mode=True, min_detection_confidence=0.6) 
                 continue
             img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
             results = holistic.process(img_rgb)
-            feature_vector = []
+            fv = []
 
             # Process left hand landmarks relative to their min values
             if results.left_hand_landmarks:
-                left = results.left_hand_landmarks
-                left_x = [lm.x for lm in left.landmark]
-                left_y = [lm.y for lm in left.landmark]
-                min_left_x = min(left_x)
-                min_left_y = min(left_y)
-                for lm in left.landmark:
-                    feature_vector.append((lm.x - min_left_x) * WEIGHT_HAND)
-                    feature_vector.append((lm.y - min_left_y) * WEIGHT_HAND)
+                lh = results.left_hand_landmarks
+                xs = [lm.x for lm in lh.landmark]
+                ys = [lm.y for lm in lh.landmark]
+                mx, my = min(xs), min(ys)
+                for lm in lh.landmark:
+                    fv.append((lm.x - mx) * WEIGHT_HAND)
+                    fv.append((lm.y - my) * WEIGHT_HAND)
             else:
-                feature_vector.extend([0.0] * (21 * 2))
+                fv.extend([0.0] * 42)
 
             # Process right hand landmarks
             if results.right_hand_landmarks:
-                right = results.right_hand_landmarks
-                right_x = [lm.x for lm in right.landmark]
-                right_y = [lm.y for lm in right.landmark]
-                min_right_x = min(right_x)
-                min_right_y = min(right_y)
-                for lm in right.landmark:
-                    feature_vector.append((lm.x - min_right_x) * WEIGHT_HAND)
-                    feature_vector.append((lm.y - min_right_y) * WEIGHT_HAND)
+                rh = results.right_hand_landmarks
+                xs = [lm.x for lm in rh.landmark]
+                ys = [lm.y for lm in rh.landmark]
+                mx, my = min(xs), min(ys)
+                for lm in rh.landmark:
+                    fv.append((lm.x - mx) * WEIGHT_HAND)
+                    fv.append((lm.y - my) * WEIGHT_HAND)
             else:
-                feature_vector.extend([0.0] * (21 * 2))
+                fv.extend([0.0] * 42)
 
-            # Process only a selected subset of face landmarks
+            # Process only selected face landmarks
             if results.face_landmarks:
-                face = results.face_landmarks
-                selected_face_x = [face.landmark[i].x for i in FACE_LANDMARKS_TO_USE]
-                selected_face_y = [face.landmark[i].y for i in FACE_LANDMARKS_TO_USE]
-                min_face_x = min(selected_face_x)
-                min_face_y = min(selected_face_y)
+                f = results.face_landmarks
+                sel_x = [f.landmark[i].x for i in FACE_LANDMARKS_TO_USE]
+                sel_y = [f.landmark[i].y for i in FACE_LANDMARKS_TO_USE]
+                mx, my = min(sel_x), min(sel_y)
                 for i in FACE_LANDMARKS_TO_USE:
-                    lm = face.landmark[i]
-                    feature_vector.append((lm.x - min_face_x) * WEIGHT_FACE)
-                    feature_vector.append((lm.y - min_face_y) * WEIGHT_FACE)
+                    lm = f.landmark[i]
+                    fv.append((lm.x - mx) * WEIGHT_FACE)
+                    fv.append((lm.y - my) * WEIGHT_FACE)
             else:
-                feature_vector.extend([0.0] * (len(FACE_LANDMARKS_TO_USE) * 2))
+                fv.extend([0.0] * (len(FACE_LANDMARKS_TO_USE) * 2))
 
             # Process pose landmarks
             if results.pose_landmarks:
-                pose = results.pose_landmarks
-                pose_x = [lm.x for lm in pose.landmark]
-                pose_y = [lm.y for lm in pose.landmark]
-                min_pose_x = min(pose_x)
-                min_pose_y = min(pose_y)
-                for lm in pose.landmark:
-                    feature_vector.append((lm.x - min_pose_x) * WEIGHT_POSE)
-                    feature_vector.append((lm.y - min_pose_y) * WEIGHT_POSE)
+                p = results.pose_landmarks
+                xs = [lm.x for lm in p.landmark]
+                ys = [lm.y for lm in p.landmark]
+                mx, my = min(xs), min(ys)
+                for lm in p.landmark:
+                    fv.append((lm.x - mx) * WEIGHT_POSE)
+                    fv.append((lm.y - my) * WEIGHT_POSE)
             else:
-                feature_vector.extend([0.0] * (33 * 2))
+                fv.extend([0.0] * 66)
 
-            data.append(feature_vector)
+            data.append(fv)
             labels.append(dir_)
 
 # Save the processed data to a pickle file
@@ -96,3 +95,16 @@ with open('data.pickle', 'wb') as f:
 
 print(f"Extracted features from {len(data)} images across {len(set(labels))} classes")
 print("Data saved to data.pickle")
+
+# Visualize class distribution using matplotlib
+cnt = Counter(labels)
+classes = list(cnt.keys())
+counts = list(cnt.values())
+plt.figure(figsize=(8, 4))
+plt.bar(classes, counts)
+plt.xlabel('Class')
+plt.ylabel('Number of Samples')
+plt.title('Samples per Class Distribution')
+plt.xticks(rotation=45)
+plt.tight_layout()
+plt.show()

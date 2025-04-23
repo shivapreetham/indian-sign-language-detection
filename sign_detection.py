@@ -37,7 +37,10 @@ labels_dict = {
     8: 'sorry', 9: 'call', 10: 'here', 11: 'light', 12: 'namaste/pray', 
     13: 'read', 14: 'loss/headache', 15: 'bond/love', 16: 'strength/powerful',
     17: 'may i go to washroom', 18: 'flower', 19: 'waiting for your action',
-    20: 'drink/water', 21: 'food', 22: 'unknown'
+    20: 'drink/water', 21: 'food', 22: 'computer science',
+    23: 'engineer', 24: 'how are you?', 25: 'i am fine',
+    26: 'promise', 27: 'yesterday', 28: 'today',
+    29: 'tomorrow' , 30:'project' , 31 : 'professional' ,32:'lab'  , 33: 'you'
 }
 
 # MediaPipe setup

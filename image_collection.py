@@ -6,7 +6,7 @@ DATA_DIR = './data'
 if not os.path.exists(DATA_DIR):
     os.makedirs(DATA_DIR)
 
-number_of_classes = 23
+number_of_classes = 34
 dataset_size = 100
 batch_size = 10  # Number of images per batch
 
