@@ -482,7 +482,8 @@ def signDetection():
                 )
                 try:
                     resp = requests.post(
-                        "http://localhost:8000/gemini",
+                        # "http://localhost:8000/gemini",
+                        "https://sign-language-3-5vax.onrender.com/gemini",
                         json={"message": prompt}
                     )
                     resp.raise_for_status()
