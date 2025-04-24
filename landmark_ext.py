@@ -14,7 +14,7 @@ WEIGHT_POSE = 0.3
 FACE_LANDMARKS_TO_USE = [1, 4, 10]
 
 # Choose the data directory - original or augmented
-DATA_DIR = './augmented_data'  # or './data' if you're not using augmentation
+DATA_DIR = './augmented_data'  
 
 data = []
 labels = []

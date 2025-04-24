@@ -6,7 +6,7 @@ DATA_DIR = './data'
 if not os.path.exists(DATA_DIR):
     os.makedirs(DATA_DIR)
 
-number_of_classes = 34
+number_of_classes = 35
 dataset_size = 100
 batch_size = 10  # Number of images per batch
 
@@ -30,7 +30,6 @@ for j in range(number_of_classes):
             counter = existing_images  # Start from the number of images already captured
     
     print(f'Collecting data for class {j} (starting at image {counter})')
-    
     # Loop until 100 images are captured for the current class
     while counter < dataset_size:
         # Ready loop: display a message and wait for 'Q' to start a batch capture
