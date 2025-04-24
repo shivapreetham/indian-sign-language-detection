@@ -383,16 +383,44 @@ def get_weighted_features(results):
 
 # Draw a semi-transparent overlay and text
 def draw_overlay(frame, text, ypos=80):
-    """Draw a semi-transparent overlay with text on the frame."""
+    """Draw a semi-transparent overlay with wrapped text on the frame."""
     font = cv2.FONT_HERSHEY_SIMPLEX
-    scale = 0.7
-    thickness = 2
-    (w, h), _ = cv2.getTextSize(text, font, scale, thickness)
+    scale = 0.6
+    thickness = 1
+    max_width = frame.shape[1] - 40  # 20px margin on each side
+    
+    # Split text into words
+    words = text.split(' ')
+    lines = []
+    current_line = words[0]
+    
+    # Create lines based on fitting text within max_width
+    for word in words[1:]:
+        test_line = current_line + ' ' + word
+        (w, h), _ = cv2.getTextSize(test_line, font, scale, thickness)
+        if w <= max_width:
+            current_line = test_line
+        else:
+            lines.append(current_line)
+            current_line = word
+    lines.append(current_line)  # Add the last line
+    
+    # Calculate total overlay height
+    line_height = h + 10
+    total_height = len(lines) * line_height
+    
+    # Draw background overlay
     x, y = 20, ypos
     overlay = frame.copy()
-    cv2.rectangle(overlay, (x-10, y-h-10), (x+w+10, y+10), (0, 0, 0), cv2.FILLED)
+    cv2.rectangle(overlay, (x-10, y-line_height), (x+max_width, y+total_height-line_height), 
+                 (0, 0, 0), cv2.FILLED)
     cv2.addWeighted(overlay, 0.7, frame, 0.3, 0, frame)
-    cv2.putText(frame, text, (x, y), font, scale, (255, 255, 255), thickness, cv2.LINE_AA)
+    
+    # Draw each line of text
+    for i, line in enumerate(lines):
+        line_y = y + i * line_height
+        cv2.putText(frame, line, (x, line_y), font, scale, (255, 255, 255), 
+                   thickness, cv2.LINE_AA)
 
 # Main detection function
 def signDetection():
@@ -402,6 +430,10 @@ def signDetection():
     recent_predictions = []
     final_predictions = []
     tts = pyttsx3.init()
+    
+    # Create a resizable window for better display
+    cv2.namedWindow("Sign Detection", cv2.WINDOW_NORMAL)
+    cv2.resizeWindow("Sign Detection", 1024, 768)  # Larger display size
     
     with mp_holistic.Holistic(
         static_image_mode=False,
@@ -469,7 +501,14 @@ def signDetection():
             
             # Instruction overlay
             cv2.putText(frame, "Press G to interpret sequence | B to go back", 
-                      (20, 450), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+                      (20, frame.shape[0] - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+            
+            # Display signs detected so far
+            if final_predictions:
+                signs_text = f"Signs detected: {', '.join(final_predictions[-5:])}"
+                cv2.putText(frame, signs_text, 
+                          (20, frame.shape[0] - 50), cv2.FONT_HERSHEY_SIMPLEX,
+                          0.7, (0, 255, 0), 2, cv2.LINE_AA)
             
             cv2.imshow("Sign Detection", frame)
             key = cv2.waitKey(1) & 0xFF
@@ -484,6 +523,14 @@ def signDetection():
                     "since they cant be captured by the words."
                 )
                 try:
+                    # Show processing message
+                    processing_frame = frame.copy()
+                    cv2.putText(processing_frame, "Processing... Please wait", 
+                              (20, 80), cv2.FONT_HERSHEY_SIMPLEX, 
+                              0.8, (0, 165, 255), 2, cv2.LINE_AA)
+                    cv2.imshow("Sign Detection", processing_frame)
+                    cv2.waitKey(1)  # Update display
+                    
                     resp = requests.post(
                         # "http://localhost:8000/gemini",
                         "https://sign-language-3-5vax.onrender.com/gemini",
@@ -491,15 +538,32 @@ def signDetection():
                     )
                     resp.raise_for_status()
                     ai_text = resp.json().get("response", "")
-                    draw_overlay(frame, ai_text, ypos=80)
-                    cv2.imshow("Sign Detection", frame)
+                    
+                    # Create a new window for the interpretation
+                    result_frame = frame.copy()
+                    cv2.putText(result_frame, "INTERPRETATION (Press any key to continue)", 
+                               (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 165, 255), 2, cv2.LINE_AA)
+                    draw_overlay(result_frame, ai_text, ypos=80)
+                    
+                    # Speak the text in background
                     tts.say(ai_text)
                     tts.runAndWait()
+                    
+                    # Show result in a dedicated window
+                    cv2.namedWindow("Sign Interpretation", cv2.WINDOW_NORMAL)
+                    cv2.resizeWindow("Sign Interpretation", 1024, 768)
+                    cv2.imshow("Sign Interpretation", result_frame)
+                    cv2.waitKey(0)  # Wait for key press
+                    cv2.destroyWindow("Sign Interpretation")
+                    
                 except Exception as e:
                     print("Error calling Gemini API:", e)
-                    cv2.putText(frame, f"API Error: {str(e)}", 
+                    error_frame = frame.copy()
+                    cv2.putText(error_frame, f"API Error: {str(e)}", 
                               (20, 80), cv2.FONT_HERSHEY_SIMPLEX,
                               0.7, (0, 0, 255), 2, cv2.LINE_AA)
+                    cv2.imshow("Sign Detection", error_frame)
+                    cv2.waitKey(2000)  # Show error for 2 seconds
                 finally:
                     final_predictions.clear()
             
