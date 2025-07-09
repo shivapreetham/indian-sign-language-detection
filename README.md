@@ -10,6 +10,7 @@ The **Sign Language Assistant** is a Python-based application aimed at bridging 
 > The app supports 35 classes focused on **Indian Sign Language (ISL)** using techniques from **Computer Vision**, **Machine Learning**, and **Natural Language Processing**.
 
 ---
+![image](https://github.com/user-attachments/assets/65119b51-60fd-491b-8f46-feb78fe4e610)
 
 ## 🚀 Features
 
