@@ -32,15 +32,15 @@ scaler = model_dict['scaler']
 
 # Label mapping for sign detection
 labels_dict = {
-    0: 'ok/correct', 1: 'good', 2: 'two', 3: 'engineer',
+    0: 'ok/correct', 1: 'looks good', 2: 'two', 3: 'engineer',
     4: 'we', 5: 'alright', 6: 'God', 7: 'Walk',
-    8: 'sorry', 9: 'give us', 10: 'for this', 11: 'light', 12: 'namaste/hello', 
-    13: 'read', 14: 'loss/headache', 15: 'bond/love', 16: 'worked hard',
+    8: 'please', 9: 'give us', 10: 'for this', 11: 'light', 12: 'namaste/hello', 
+    13: 'read', 14: 'loss/headache', 15: 'collaboration', 16: 'worked hard',
     17: 'may i go to washroom', 18: 'flower', 19: 'waiting for your action',
     20: 'drink/water', 21: 'food', 22: 'computer science',
     23: 'engineer', 24: 'how are you?', 25: 'i am fine', 
     26: 'please', 27: 'yesterday', 28: 'today',
-    29: 'tomorrow' , 30:'project' , 31 : 'professional' ,32:'lab'  , 33: 'you' ,34:'O grade'
+    29: 'tomorrow' , 30:'project' , 31 : 'professional' ,32:'lab project'  , 33: 'you' ,34:'O grade'
 }
 # MediaPipe setup
 mp_holistic = mp.solutions.holistic

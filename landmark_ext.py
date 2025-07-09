@@ -5,7 +5,6 @@ import mediapipe as mp
 import numpy as np
 import matplotlib.pyplot as plt
 from collections import Counter
-
 # Configuration for weights and selected landmarks
 WEIGHT_HAND = 1.0
 WEIGHT_FACE = 0.1

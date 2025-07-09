@@ -5,7 +5,6 @@ from albumentations import (
     Compose, RandomBrightnessContrast, GaussianBlur, 
     HorizontalFlip, ShiftScaleRotate, CLAHE
 )
-
 # Augmentation settings
 AUGMENTATIONS_PER_IMAGE = 3  # Number of augmented versions per original image
 OUTPUT_DIR = './augmented_data'
