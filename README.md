@@ -23,6 +23,13 @@ The **Sign Language Assistant** is a Python-based application aimed at bridging 
 * **🖥️ UI**: Built with **Tkinter**, interactive and easy to use.
 
 ---
+## 🎥 Demo
+
+<div align="center">
+  <a href="https://youtu.be/drGgR95xvug" target="_blank">
+    <img src="https://img.youtube.com/vi/drGgR95xvug/maxresdefault.jpg" alt="Sign Language Assistant Demo" width="600" />
+  </a>
+</div>
 
 ## 🔧 Prerequisites
 
